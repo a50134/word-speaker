@@ -1,0 +1,264 @@
+<!doctype html>
+<html lang="zh-Hant">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>點字發音板</title>
+
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Atkinson+Hyperlegible:wght@400;700&family=Noto+Sans+TC:wght@400;500;700&display=swap">
+<style>
+:root{
+  --bg:#F3F5F8; --panel:#FFFFFF; --ink:#18202C; --muted:#5B6576; --line:#DCE1E9;
+  --blue:#2A56C6; --blue-soft:#E4EBFB; --mark:#FFD84D; --mark-ink:#18202C;
+  --word:"Atkinson Hyperlegible", "Segoe UI", system-ui, sans-serif;
+  --ui:"Noto Sans TC", "Microsoft JhengHei", "PingFang TC", system-ui, sans-serif;
+}
+@media (prefers-color-scheme: dark){
+  :root:not([data-theme="light"]){
+    --bg:#11151C; --panel:#1A2029; --ink:#E6EAF1; --muted:#9AA4B5; --line:#2C3441;
+    --blue:#8AA8FF; --blue-soft:#243152; --mark:#F5CB3A; --mark-ink:#11151C; color-scheme:dark;
+  }
+}
+:root[data-theme="dark"]{
+  --bg:#11151C; --panel:#1A2029; --ink:#E6EAF1; --muted:#9AA4B5; --line:#2C3441;
+  --blue:#8AA8FF; --blue-soft:#243152; --mark:#F5CB3A; --mark-ink:#11151C; color-scheme:dark;
+}
+*{box-sizing:border-box}
+body{background:var(--bg);color:var(--ink);font-family:var(--ui);font-size:15px;line-height:1.6;padding-inline:16px;padding-block:20px 40px}
+.wrap{max-width:820px;margin:0 auto;display:flex;flex-direction:column;gap:16px}
+header{display:flex;flex-wrap:wrap;align-items:flex-end;justify-content:space-between;gap:12px}
+h1{font-size:22px;margin:0;text-wrap:balance;letter-spacing:.02em}
+header p{margin:2px 0 0;color:var(--muted);font-size:13.5px}
+.controls{display:flex;flex-wrap:wrap;gap:10px;align-items:center}
+label.ctl{display:flex;align-items:center;gap:6px;font-size:13px;color:var(--muted)}
+select,button,textarea{font:inherit;color:var(--ink)}
+select{background:var(--panel);border:1px solid var(--line);border-radius:8px;padding:5px 8px;max-width:210px}
+.speed{display:flex;border:1px solid var(--line);border-radius:8px;overflow:hidden;background:var(--panel)}
+.speed button{border:0;background:none;padding:5px 10px;cursor:pointer;font-variant-numeric:tabular-nums;font-size:13px}
+.speed button[aria-pressed="true"]{background:var(--blue);color:var(--panel)}
+.board{background:var(--panel);border:1px solid var(--line);border-radius:12px;padding:8px 0}
+.row{display:grid;grid-template-columns:36px 1fr;gap:8px;align-items:start;padding:10px 16px}
+.row + .row{border-top:1px solid var(--line)}
+.play{width:32px;height:32px;border-radius:50%;border:1px solid var(--line);background:var(--blue-soft);color:var(--blue);cursor:pointer;display:grid;place-items:center;margin-top:3px}
+.play svg{width:12px;height:12px;fill:currentColor}
+.play.on{background:var(--blue);color:var(--panel)}
+.line{font-family:var(--word);font-size:21px;line-height:1.7;overflow-wrap:anywhere}
+.w{font:inherit;border:0;background:none;padding:0 2px;margin:0 -1px;border-radius:4px;cursor:pointer;color:inherit;border-bottom:1px dotted transparent}
+.w:hover{border-bottom-color:var(--blue);color:var(--blue)}
+.w.on{background:var(--mark);color:var(--mark-ink)}
+.p{color:var(--muted)}
+.zh{font-family:var(--ui);font-size:14px;color:var(--muted);line-height:1.5;margin-top:2px}
+button:focus-visible,select:focus-visible,textarea:focus-visible,summary:focus-visible{outline:2px solid var(--blue);outline-offset:2px}
+details{background:var(--panel);border:1px solid var(--line);border-radius:12px;padding:12px 16px}
+summary{cursor:pointer;font-weight:500}
+textarea{width:100%;min-height:180px;margin-top:10px;background:var(--bg);border:1px solid var(--line);border-radius:8px;padding:10px;font-family:var(--word);font-size:15px;line-height:1.5;resize:vertical}
+.hint{font-size:13px;color:var(--muted);margin:6px 0 0}
+.actions{display:flex;gap:8px;flex-wrap:wrap;margin-top:10px}
+.btn{border:1px solid var(--line);background:var(--panel);border-radius:8px;padding:6px 14px;cursor:pointer}
+.btn.primary{background:var(--blue);border-color:var(--blue);color:var(--panel)}
+.status{font-size:13px;color:var(--muted);min-height:1.4em}
+.warn{color:#B3261E}
+@media (max-width:480px){.line{font-size:19px}.row{padding:10px 12px}}
+@media (prefers-reduced-motion: reduce){*{transition:none!important}}
+</style>
+</head>
+<body>
+
+
+<div class="wrap">
+  <header>
+    <div>
+      <h1>點字發音板</h1>
+      <p>點任何一個英文單字就會唸出來；點左邊的 ▶ 唸整句。</p>
+    </div>
+    <div class="controls">
+      <div class="speed" role="group" aria-label="語速">
+        <button type="button" data-rate="0.6">0.6×</button>
+        <button type="button" data-rate="0.8">0.8×</button>
+        <button type="button" data-rate="1">1×</button>
+      </div>
+      <label class="ctl" for="voice">聲音
+        <select id="voice"></select>
+      </label>
+      <button type="button" class="btn" id="nextFemale">換一個女聲</button>
+    </div>
+  </header>
+
+  <div class="status" id="status" aria-live="polite"></div>
+  <section class="board" id="board" aria-label="句子"></section>
+
+  <details id="editBox">
+    <summary>換成我的句子</summary>
+    <textarea id="src" spellcheck="false"></textarea>
+    <p class="hint">一行一句。要附中文就在英文後面加「｜」再寫中文，例如：<br>You like it?｜你喜歡嗎？</p>
+    <div class="actions">
+      <button type="button" class="btn primary" id="apply">套用</button>
+      <button type="button" class="btn" id="reset">換回範例</button>
+    </div>
+  </details>
+</div>
+
+<script>
+(function(){
+  var SAMPLE = [
+    "I saw you looking at it in the gift shop.｜我看到你在禮品店看著它。",
+    "A Mt. Rushmore bobblehead.｜一個拉什莫爾山搖頭公仔。",
+    "You like it?｜你喜歡嗎？",
+    "Ooh! I absolutely love it.｜喔！我非常喜歡。",
+    "Great. I gotta get back.｜太好了。我得回去了。",
+    "Happy birthday.｜生日快樂。",
+    "This was the best birthday ever.｜這是有史以來最棒的生日。"
+  ].join("\n");
+
+  function load(k){ try { return localStorage.getItem(k); } catch(e){ return null; } }
+  function save(k,v){ try { localStorage.setItem(k,v); } catch(e){} }
+
+  var params = new URLSearchParams(location.search);
+  var text = params.get("text") || load("wsp.text") || SAMPLE;
+  var rate = parseFloat(load("wsp.rate")) || 0.8;
+  var voiceName = load("wsp.voice") || "";
+
+  var board = document.getElementById("board");
+  var src = document.getElementById("src");
+  var statusEl = document.getElementById("status");
+  var voiceSel = document.getElementById("voice");
+  var synth = window.speechSynthesis;
+  var voices = [];
+  var activeEls = [];
+
+  if (!synth || typeof SpeechSynthesisUtterance === "undefined") {
+    statusEl.innerHTML = '<span class="warn">這個瀏覽器不支援語音朗讀。請改用 Chrome、Edge 或 Safari 開啟。</span>';
+  }
+
+  function clearActive(){ activeEls.forEach(function(el){ el.classList.remove("on"); }); activeEls = []; }
+
+  function speak(str, els){
+    if (!synth) return;
+    synth.cancel();
+    clearActive();
+    var u = new SpeechSynthesisUtterance(str);
+    var v = voices.find(function(x){ return x.name === voiceSel.value; });
+    if (v) { u.voice = v; u.lang = v.lang; } else { u.lang = "en-US"; }
+    u.rate = rate;
+    (els || []).forEach(function(el){ el.classList.add("on"); });
+    activeEls = els || [];
+    u.onend = u.onerror = function(){ clearActive(); };
+    synth.speak(u);
+  }
+
+  function render(){
+    board.innerHTML = "";
+    var lines = text.split(/\r?\n/).map(function(s){ return s.trim(); }).filter(Boolean);
+    if (!lines.length) {
+      board.innerHTML = '<div class="row"><div></div><div class="zh">還沒有句子。展開下方「換成我的句子」貼上英文。</div></div>';
+      return;
+    }
+    lines.forEach(function(raw){
+      var parts = raw.split(/[｜|]/);
+      var en = parts[0].trim();
+      var zh = parts.slice(1).join("｜").trim();
+      var row = document.createElement("div"); row.className = "row";
+      var play = document.createElement("button");
+      play.type = "button"; play.className = "play";
+      play.setAttribute("aria-label", "唸整句：" + en);
+      play.innerHTML = '<svg viewBox="0 0 12 12"><path d="M2 1l9 5-9 5z"/></svg>';
+      play.addEventListener("click", function(){ speak(en, [play]); });
+      var body = document.createElement("div");
+      var line = document.createElement("div"); line.className = "line"; line.lang = "en";
+      en.split(/([A-Za-z0-9]+(?:[’'.\-][A-Za-z0-9]+)*)/).forEach(function(tok){
+        if (!tok) return;
+        if (/^[A-Za-z0-9]/.test(tok)) {
+          var b = document.createElement("button");
+          b.type = "button"; b.className = "w"; b.textContent = tok;
+          b.addEventListener("click", function(){ speak(tok.replace(/’/g,"'"), [b]); });
+          line.appendChild(b);
+        } else {
+          var s = document.createElement("span"); s.className = "p"; s.textContent = tok;
+          line.appendChild(s);
+        }
+      });
+      body.appendChild(line);
+      if (zh) { var z = document.createElement("div"); z.className = "zh"; z.textContent = zh; body.appendChild(z); }
+      row.appendChild(play); row.appendChild(body);
+      board.appendChild(row);
+    });
+  }
+
+  // Speech APIs don't expose gender, so classify by well-known voice names.
+  var FEMALE = /female|aria|jenny|michelle|ana\b|emma|ava|sonia|libby|maisie|zira|hazel|susan|samantha|karen|moira|tessa|fiona|victoria|allison|serena|kate|natasha|clara|leah|molly|nancy|joanna|salli|kimberly|ivy|kendra|amber|ashley|cora|elizabeth|jane|sara|heera|neerja|catherine|google us english/i;
+  var MALE = /\bmale|guy|davis|eric|christopher|roger|steffan|brandon|jacob|tony|ryan|thomas|alfie|elliot|oliver|george|david|mark|james|william|daniel|alex|fred|tom|aaron|arthur|rishi|prabhat|google uk english male/i;
+  function gender(v){ if (MALE.test(v.name) && !/female/i.test(v.name)) return "男"; return FEMALE.test(v.name) ? "女" : ""; }
+
+  function fillVoices(){
+    if (!synth) return;
+    voices = synth.getVoices().filter(function(v){ return /^en(-|_|$)/i.test(v.lang); });
+    voices.sort(function(a,b){
+      var rank = function(v){ return (gender(v) === "女" ? 0 : 3) + (/en-US/i.test(v.lang) ? 0 : /en-GB/i.test(v.lang) ? 1 : 2); };
+      return rank(a) - rank(b) || a.name.localeCompare(b.name);
+    });
+    voiceSel.innerHTML = "";
+    if (!voices.length) { var o = document.createElement("option"); o.textContent = "系統預設（美式）"; o.value = ""; voiceSel.appendChild(o); return; }
+    voices.forEach(function(v){
+      var o = document.createElement("option");
+      o.value = v.name;
+      var tag = /en-US/i.test(v.lang) ? "美式" : /en-GB/i.test(v.lang) ? "英式" : /en-AU/i.test(v.lang) ? "澳式" : v.lang;
+      var g = gender(v);
+      o.textContent = (g ? g + "・" : "") + tag + "｜" + v.name.replace(/Microsoft |Google |Online \(Natural\)| - English.*$/g, "").trim();
+      voiceSel.appendChild(o);
+    });
+    if (voiceName && voices.some(function(v){ return v.name === voiceName; })) voiceSel.value = voiceName;
+  }
+
+  voiceSel.addEventListener("change", function(){ save("wsp.voice", voiceSel.value); });
+
+  document.getElementById("nextFemale").addEventListener("click", function(){
+    var females = voices.filter(function(v){ return gender(v) === "女"; });
+    if (!females.length) { statusEl.textContent = "這台裝置沒有找到其他女聲，可以從「聲音」選單手動挑。"; return; }
+    var i = females.findIndex(function(v){ return v.name === voiceSel.value; });
+    var next = females[(i + 1) % females.length];
+    voiceSel.value = next.name; save("wsp.voice", next.name);
+    statusEl.textContent = "現在的聲音：" + voiceSel.options[voiceSel.selectedIndex].textContent + "（這台裝置共有 " + females.length + " 個女聲）";
+    speak("Hi! This is my voice.", []);
+  });
+
+  var speedBtns = document.querySelectorAll(".speed button");
+  function syncSpeed(){ speedBtns.forEach(function(b){ b.setAttribute("aria-pressed", String(parseFloat(b.dataset.rate) === rate)); }); }
+  speedBtns.forEach(function(b){ b.addEventListener("click", function(){ rate = parseFloat(b.dataset.rate); save("wsp.rate", String(rate)); syncSpeed(); }); });
+
+  document.getElementById("apply").addEventListener("click", function(){
+    text = src.value; save("wsp.text", text); render();
+    document.getElementById("editBox").open = false;
+    statusEl.textContent = "已套用你的句子。";
+  });
+  document.getElementById("reset").addEventListener("click", function(){
+    text = SAMPLE; src.value = SAMPLE; save("wsp.text", text); render();
+    statusEl.textContent = "已換回範例句子。";
+  });
+
+  src.value = text;
+  syncSpeed();
+  render();
+
+  // ?day=N loads that day's sentences from days.json published next to this page.
+  var day = params.get("day");
+  if (day && /^\d{1,2}$/.test(day)) {
+    fetch("days.json").then(function(r){ if (!r.ok) throw new Error(r.status); return r.json(); }).then(function(all){
+      var items = all[day];
+      if (!items || !items.length) throw new Error("no day");
+      text = items.map(function(s){ return s.zh ? s.en + "｜" + s.zh : s.en; }).join("\n");
+      src.value = text;
+      document.querySelector("h1").textContent = "點字發音板｜Day " + day;
+      render();
+    }).catch(function(){
+      statusEl.textContent = "找不到 Day " + day + " 的句子，先顯示上次用的句子。";
+    });
+  }
+  fillVoices();
+  if (synth && "onvoiceschanged" in synth) synth.onvoiceschanged = fillVoices;
+})();
+</script>
+
+</body>
+</html>
