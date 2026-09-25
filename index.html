@@ -228,7 +228,9 @@ textarea{width:100%;min-height:180px;margin-top:10px;background:var(--bg);border
     voices.sort(function(a,b){
       // Neural voices ("Natural", Google) sound far better than the old desktop voices.
       var rank = function(v){
-        var q = /natural|online|neural|premium|enhanced/i.test(v.name) ? 0 : /google|samantha/i.test(v.name) ? 1 : 2;
+        if (/jenny/i.test(v.name)) return -2;
+        if (/sonia/i.test(v.name)) return -1;
+        var q =/natural|online|neural|premium|enhanced/i.test(v.name) ? 0 : /google|samantha/i.test(v.name) ? 1 : 2;
         return (gender(v) === "女" ? 0 : 10) + q * 3 + (/en-US/i.test(v.lang) ? 0 : /en-GB/i.test(v.lang) ? 1 : 2);
       };
       return rank(a) - rank(b) || a.name.localeCompare(b.name);
