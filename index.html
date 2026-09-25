@@ -118,7 +118,7 @@ textarea{width:100%;min-height:180px;margin-top:10px;background:var(--bg);border
   var params = new URLSearchParams(location.search);
   var text = params.get("text") || load("wsp.text") || SAMPLE;
   var rate = parseFloat(load("wsp.rate")) || 0.8;
-  var voiceName = load("wsp.voice") || "";
+  var voiceName = load("wsp.voice2") || "";
 
   var board = document.getElementById("board");
   var src = document.getElementById("src");
@@ -148,6 +148,37 @@ textarea{width:100%;min-height:180px;margin-top:10px;background:var(--bg);border
     synth.speak(u);
   }
 
+  // Single words: prefer a human recording from the free dictionary API, fall back to TTS.
+  var audioCache = {};
+  var player = new Audio();
+  function dictAudio(word){
+    var key = word.toLowerCase();
+    if (key in audioCache) return Promise.resolve(audioCache[key]);
+    var ctrl = window.AbortController ? new AbortController() : null;
+    var timer = setTimeout(function(){ if (ctrl) ctrl.abort(); }, 2500);
+    return fetch("https://api.dictionaryapi.dev/api/v2/entries/en/" + encodeURIComponent(key), ctrl ? { signal: ctrl.signal } : {})
+      .then(function(r){ return r.ok ? r.json() : []; })
+      .then(function(d){
+        var list = (Array.isArray(d) ? d : []).reduce(function(a, e){ return a.concat(e.phonetics || []); }, [])
+          .map(function(p){ return p.audio; }).filter(Boolean);
+        var url = list.find(function(u){ return /-us\.mp3$/.test(u); }) || list[0] || "";
+        audioCache[key] = url; return url;
+      })
+      .catch(function(){ audioCache[key] = ""; return ""; })
+      .finally(function(){ clearTimeout(timer); });
+  }
+  function speakWord(word, el){
+    if (/^\d+$/.test(word) || word.length < 2) { speak(word, [el]); return; }
+    if (synth) synth.cancel();
+    clearActive(); el.classList.add("on"); activeEls = [el];
+    dictAudio(word).then(function(url){
+      if (!url) { speak(word, [el]); return; }
+      player.pause(); player.src = url; player.playbackRate = rate < 1 ? Math.max(0.7, rate) : 1;
+      player.onended = player.onerror = function(){ clearActive(); };
+      player.play().catch(function(){ speak(word, [el]); });
+    });
+  }
+
   function render(){
     board.innerHTML = "";
     var lines = text.split(/\r?\n/).map(function(s){ return s.trim(); }).filter(Boolean);
@@ -172,7 +203,7 @@ textarea{width:100%;min-height:180px;margin-top:10px;background:var(--bg);border
         if (/^[A-Za-z0-9]/.test(tok)) {
           var b = document.createElement("button");
           b.type = "button"; b.className = "w"; b.textContent = tok;
-          b.addEventListener("click", function(){ speak(tok.replace(/’/g,"'"), [b]); });
+          b.addEventListener("click", function(){ speakWord(tok.replace(/’/g,"'"), b); });
           line.appendChild(b);
         } else {
           var s = document.createElement("span"); s.className = "p"; s.textContent = tok;
@@ -195,7 +226,11 @@ textarea{width:100%;min-height:180px;margin-top:10px;background:var(--bg);border
     if (!synth) return;
     voices = synth.getVoices().filter(function(v){ return /^en(-|_|$)/i.test(v.lang); });
     voices.sort(function(a,b){
-      var rank = function(v){ return (gender(v) === "女" ? 0 : 3) + (/en-US/i.test(v.lang) ? 0 : /en-GB/i.test(v.lang) ? 1 : 2); };
+      // Neural voices ("Natural", Google) sound far better than the old desktop voices.
+      var rank = function(v){
+        var q = /natural|online|neural|premium|enhanced/i.test(v.name) ? 0 : /google|samantha/i.test(v.name) ? 1 : 2;
+        return (gender(v) === "女" ? 0 : 10) + q * 3 + (/en-US/i.test(v.lang) ? 0 : /en-GB/i.test(v.lang) ? 1 : 2);
+      };
       return rank(a) - rank(b) || a.name.localeCompare(b.name);
     });
     voiceSel.innerHTML = "";
@@ -211,14 +246,14 @@ textarea{width:100%;min-height:180px;margin-top:10px;background:var(--bg);border
     if (voiceName && voices.some(function(v){ return v.name === voiceName; })) voiceSel.value = voiceName;
   }
 
-  voiceSel.addEventListener("change", function(){ save("wsp.voice", voiceSel.value); });
+  voiceSel.addEventListener("change", function(){ save("wsp.voice2", voiceSel.value); });
 
   document.getElementById("nextFemale").addEventListener("click", function(){
     var females = voices.filter(function(v){ return gender(v) === "女"; });
     if (!females.length) { statusEl.textContent = "這台裝置沒有找到其他女聲，可以從「聲音」選單手動挑。"; return; }
     var i = females.findIndex(function(v){ return v.name === voiceSel.value; });
     var next = females[(i + 1) % females.length];
-    voiceSel.value = next.name; save("wsp.voice", next.name);
+    voiceSel.value = next.name; save("wsp.voice2", next.name);
     statusEl.textContent = "現在的聲音：" + voiceSel.options[voiceSel.selectedIndex].textContent + "（這台裝置共有 " + females.length + " 個女聲）";
     speak("Hi! This is my voice.", []);
   });
