@@ -102,6 +102,10 @@ input[type=text],input[type=password]{background:var(--bg);border:1px solid var(
         <button type="button" data-rate="0.8">0.8×</button>
         <button type="button" data-rate="1">1×</button>
       </div>
+      <label class="ctl" for="vol">音量
+        <input type="range" id="vol" min="0" max="100" step="5" value="30">
+        <span id="volNum">30</span>
+      </label>
       <label class="ctl" for="voice">聲音
         <select id="voice"></select>
       </label>
@@ -171,6 +175,8 @@ input[type=text],input[type=password]{background:var(--bg);border:1px solid var(
   var params = new URLSearchParams(location.search);
   var rate = parseFloat(load("wsp.rate")) || 0.8;
   var voiceName = load("wsp.voice2") || "";
+  var savedVol = parseInt(load("wsp.vol"), 10);
+  var volume = (isNaN(savedVol) ? 30 : Math.max(0, Math.min(100, savedVol))) / 100;
   var embedded = false;
   try { embedded = window.self !== window.top; } catch(e){ embedded = true; }
 
@@ -203,7 +209,7 @@ input[type=text],input[type=password]{background:var(--bg);border:1px solid var(
     var u = new SpeechSynthesisUtterance(str);
     var v = voices.find(function(x){ return x.name === voiceSel.value; });
     if (v) { u.voice = v; u.lang = v.lang; } else { u.lang = "en-US"; }
-    u.rate = rate;
+    u.rate = rate; u.volume = volume;
     (els || []).forEach(function(el){ el.classList.add("on"); });
     activeEls = els || [];
     u.onend = u.onerror = function(){ clearActive(); };
@@ -215,7 +221,7 @@ input[type=text],input[type=password]{background:var(--bg);border:1px solid var(
       stopAll();
       (els || []).forEach(function(el){ el.classList.add("on"); });
       activeEls = els || [];
-      player.src = url; player.playbackRate = speed || 1;
+      player.src = url; player.playbackRate = speed || 1; player.volume = volume;
       player.onended = player.onerror = function(){ clearActive(); resolve(); };
       player.play().catch(function(){ clearActive(); resolve(); });
     });
@@ -244,7 +250,7 @@ input[type=text],input[type=password]{background:var(--bg);border:1px solid var(
     stopAll(); el.classList.add("on"); activeEls = [el];
     dictAudio(word).then(function(url){
       if (!url) { speak(word, [el]); return; }
-      player.src = url; player.playbackRate = rate < 1 ? Math.max(0.7, rate) : 1;
+      player.src = url; player.playbackRate = rate < 1 ? Math.max(0.7, rate) : 1; player.volume = volume;
       player.onended = player.onerror = function(){ clearActive(); };
       player.play().catch(function(){ speak(word, [el]); });
     });
@@ -549,6 +555,13 @@ input[type=text],input[type=password]{background:var(--bg);border:1px solid var(
     voiceSel.value = next.name; voiceName = next.name; save("wsp.voice2", next.name);
     statusEl.textContent = "現在的聲音：" + voiceSel.options[voiceSel.selectedIndex].textContent + "（這台裝置共有 " + females.length + " 個女聲）";
     speak("Hi! This is my voice.", []);
+  });
+
+  var volEl = $("vol"), volNum = $("volNum");
+  volEl.value = String(Math.round(volume * 100)); volNum.textContent = volEl.value;
+  volEl.addEventListener("input", function(){
+    volume = parseInt(volEl.value, 10) / 100; volNum.textContent = volEl.value;
+    player.volume = volume; save("wsp.vol", volEl.value);
   });
 
   var speedBtns = document.querySelectorAll(".speed button");
