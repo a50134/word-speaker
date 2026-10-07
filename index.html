@@ -209,7 +209,7 @@ input[type=text],input[type=password]{background:var(--bg);border:1px solid var(
     var u = new SpeechSynthesisUtterance(str);
     var v = voices.find(function(x){ return x.name === voiceSel.value; });
     if (v) { u.voice = v; u.lang = v.lang; } else { u.lang = "en-US"; }
-    u.rate = rate; u.volume = volume;
+    u.rate = rate; u.volume = Math.min(1, volume * 2.5); // computer voices are much quieter than the clips
     (els || []).forEach(function(el){ el.classList.add("on"); });
     activeEls = els || [];
     u.onend = u.onerror = function(){ clearActive(); };
@@ -250,7 +250,7 @@ input[type=text],input[type=password]{background:var(--bg);border:1px solid var(
     stopAll(); el.classList.add("on"); activeEls = [el];
     dictAudio(word).then(function(url){
       if (!url) { speak(word, [el]); return; }
-      player.src = url; player.playbackRate = rate < 1 ? Math.max(0.7, rate) : 1; player.volume = volume;
+      player.src = url; player.playbackRate = rate < 1 ? Math.max(0.7, rate) : 1; player.volume = Math.min(1, volume * 2.5);
       player.onended = player.onerror = function(){ clearActive(); };
       player.play().catch(function(){ speak(word, [el]); });
     });
