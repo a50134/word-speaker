@@ -125,7 +125,7 @@ input[type=text],input[type=password]{background:var(--bg);border:1px solid var(
 
   <details class="box" id="clipBox">
     <summary>原音設定 <span id="clipCount" class="hint"></span></summary>
-    <p class="hint">影片原音不會上傳到網路，只存在這台電腦的這個瀏覽器裡。選一次資料夾就好：<br><code>桌面\Codex-project\artifacts</code></p>
+    <p class="hint">影片原音不會上傳到網路，只存在這台電腦的這個瀏覽器裡。選一次資料夾就好：<br><code>桌面\Codex-project\phineas-clips-v2</code>（2026/10/08 重剪的新版；之前選過舊資料夾的話，請再選一次這個）</p>
     <div class="actions">
       <label class="btn primary" for="clipDir">選擇原音資料夾</label>
       <input type="file" id="clipDir" webkitdirectory multiple hidden>
@@ -157,7 +157,7 @@ input[type=text],input[type=password]{background:var(--bg);border:1px solid var(
       <button type="button" class="btn" id="reset">換回範例</button>
     </div>
   </details>
-  <p class="hint" id="ver">版本 7（單字音量可放大到 600%；錄音辨識會自動重試）</p>
+  <p class="hint" id="ver">版本 8（原音改用重剪後的 phineas-clips-v2 資料夾）</p>
 </div>
 
 <script>
@@ -315,7 +315,7 @@ input[type=text],input[type=password]{background:var(--bg);border:1px solid var(
   }
   $("clipDir").addEventListener("change", function(ev){
     var files = Array.prototype.slice.call(ev.target.files || []).filter(function(f){ return /^Day\d+-\d+\.mp3$/i.test(f.name); });
-    if (!files.length) { statusEl.innerHTML = '<span class="warn">這個資料夾裡找不到 Day1-01.mp3 這種檔名的原音。請選 Codex-project 裡的 artifacts 資料夾。</span>'; return; }
+    if (!files.length) { statusEl.innerHTML = '<span class="warn">這個資料夾裡找不到 Day1-01.mp3 這種檔名的原音。請選 Codex-project 裡的 phineas-clips-v2 資料夾。</span>'; return; }
     statusEl.textContent = "正在載入 " + files.length + " 個原音…";
     idb("readwrite", function(s){ files.forEach(function(f){ s.put(f, f.name.replace(/\.mp3$/i, "").replace(/^day/i, "Day")); }); })
       .then(function(){ statusEl.textContent = "已載入 " + files.length + " 個原音。"; return refreshClips(); })
