@@ -157,7 +157,7 @@ input[type=text],input[type=password]{background:var(--bg);border:1px solid var(
       <button type="button" class="btn" id="reset">換回範例</button>
     </div>
   </details>
-  <p class="hint" id="ver">版本 8（原音改用重剪後的 phineas-clips-v2 資料夾）</p>
+  <p class="hint" id="ver">版本 9（單字固定用正常速度的女聲）</p>
 </div>
 
 <script>
@@ -276,7 +276,7 @@ input[type=text],input[type=password]{background:var(--bg);border:1px solid var(
     wordBuffer(slug).then(function(buf){
       if (activeEls[0] !== el) return;                    // another word was clicked meanwhile
       var src = ac.createBufferSource(), gain = ac.createGain(), lim = ac.createDynamicsCompressor();
-      src.buffer = buf; src.playbackRate.value = rate < 1 ? Math.max(0.75, rate) : 1;
+      src.buffer = buf; // always natural speed: slowing a buffer lowers the pitch and the voice stops sounding female
       gain.gain.value = wordGain;
       lim.threshold.value = -2; lim.knee.value = 0; lim.ratio.value = 20; lim.attack.value = 0.002; lim.release.value = 0.1;
       src.connect(gain); gain.connect(lim); lim.connect(ac.destination);
