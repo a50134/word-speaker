@@ -107,6 +107,10 @@ input[type=text],input[type=password]{background:var(--bg);border:1px solid var(
         <input type="range" id="vol" min="0" max="100" step="5" value="30">
         <span id="volNum">30</span>
       </label>
+      <label class="ctl" for="wgain">單字音量
+        <input type="range" id="wgain" min="100" max="600" step="50" value="300">
+        <span id="wgainNum">300%</span>
+      </label>
       <label class="ctl" for="voice">聲音
         <select id="voice"></select>
       </label>
@@ -153,7 +157,7 @@ input[type=text],input[type=password]{background:var(--bg);border:1px solid var(
       <button type="button" class="btn" id="reset">換回範例</button>
     </div>
   </details>
-  <p class="hint" id="ver">版本 6（單字以最大音量播放）</p>
+  <p class="hint" id="ver">版本 7（單字音量可放大到 600%；錄音辨識會自動重試）</p>
 </div>
 
 <script>
@@ -203,7 +207,7 @@ input[type=text],input[type=password]{background:var(--bg);border:1px solid var(
   }
 
   function clearActive(){ activeEls.forEach(function(el){ el.classList.remove("on"); }); activeEls = []; }
-  function stopAll(){ if (synth) synth.cancel(); player.pause(); clearActive(); }
+  function stopAll(){ if (synth) synth.cancel(); player.pause(); if (typeof stopWord === "function") stopWord(); clearActive(); }
 
   function speak(str, els, full){
     if (!synth) return;
@@ -247,17 +251,38 @@ input[type=text],input[type=password]{background:var(--bg);border:1px solid var(
       .catch(function(){ audioCache[key] = ""; return ""; })
       .finally(function(){ clearTimeout(timer); });
   }
+  // Single words use pre-made recordings from words/ played through a gain stage, so they can be
+  // made louder than the browser's own maximum. Falls back to the computer voice at full volume.
+  var actx = null, wordBufs = {}, wordSrc = null;
+  var savedGain = parseInt(load("wsp.wgain"), 10);
+  var wordGain = (isNaN(savedGain) ? 300 : Math.max(100, Math.min(600, savedGain))) / 100;
+  function audioCtx(){
+    if (!actx) { var AC = window.AudioContext || window.webkitAudioContext; if (!AC) return null; actx = new AC(); }
+    if (actx.state === "suspended") actx.resume();
+    return actx;
+  }
+  function stopWord(){ if (wordSrc) { try { wordSrc.onended = null; wordSrc.stop(); } catch(e){} wordSrc = null; } }
+  function wordBuffer(slug){
+    if (wordBufs[slug]) return Promise.resolve(wordBufs[slug]);
+    return fetch("words/" + slug + ".mp3").then(function(r){ if (!r.ok) throw new Error("no file"); return r.arrayBuffer(); })
+      .then(function(b){ return audioCtx().decodeAudioData(b); })
+      .then(function(buf){ wordBufs[slug] = buf; return buf; });
+  }
   function speakWord(word, el){
-    // Single words always play at full volume: the volume slider is for sentences and clips.
-    // A neural voice (Jenny, Sonia...) is clear and loud, so use it directly; dictionary recordings are often faint.
-    if (/^\d+$/.test(word) || word.length < 2 || /natural|online|neural/i.test(voiceSel.value)) { speak(word, [el], true); return; }
+    var slug = word.toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-+|-+$/g, "");
+    var ac = audioCtx();
+    if (!ac || !slug || /^\d+$/.test(word)) { speak(word, [el], true); return; }
     stopAll(); el.classList.add("on"); activeEls = [el];
-    dictAudio(word).then(function(url){
-      if (!url) { speak(word, [el], true); return; }
-      player.src = url; player.playbackRate = rate < 1 ? Math.max(0.7, rate) : 1; player.volume = 1;
-      player.onended = player.onerror = function(){ clearActive(); };
-      player.play().catch(function(){ speak(word, [el], true); });
-    });
+    wordBuffer(slug).then(function(buf){
+      if (activeEls[0] !== el) return;                    // another word was clicked meanwhile
+      var src = ac.createBufferSource(), gain = ac.createGain(), lim = ac.createDynamicsCompressor();
+      src.buffer = buf; src.playbackRate.value = rate < 1 ? Math.max(0.75, rate) : 1;
+      gain.gain.value = wordGain;
+      lim.threshold.value = -2; lim.knee.value = 0; lim.ratio.value = 20; lim.attack.value = 0.002; lim.release.value = 0.1;
+      src.connect(gain); gain.connect(lim); lim.connect(ac.destination);
+      src.onended = function(){ if (wordSrc === src) wordSrc = null; clearActive(); };
+      wordSrc = src; src.start();
+    }).catch(function(){ speak(word, [el], true); });
   }
 
   // ---- Original clips: kept only in this browser's IndexedDB ----
@@ -327,10 +352,17 @@ input[type=text],input[type=password]{background:var(--bg);border:1px solid var(
     var ws = row.querySelectorAll(".w");
     ws.forEach(function(el, k){ el.classList.remove("s-good", "s-mid", "s-bad"); if (classes[k]) el.classList.add(classes[k]); });
   }
-  function showFree(row, item, transcript){
+  function showFree(row, item, transcript, srErr){
     var res = row.querySelector(".result");
     var target = wordsOf(item.en);
-    if (!transcript) { res.innerHTML = '<div class="heard">沒有辨識到文字。這個瀏覽器可能不支援語音辨識（請用 Edge 或 Chrome），或是聲音太小。</div>'; return; }
+    if (!transcript) {
+      var why = !SR() ? "這個瀏覽器不支援語音辨識，請用 Edge 或 Chrome。"
+        : srErr === "network" ? "語音辨識連不上網路服務，請檢查網路後再錄一次。"
+        : srErr === "not-allowed" || srErr === "service-not-allowed" ? "瀏覽器沒有允許語音辨識使用麥克風，請在網址列左邊允許。"
+        : srErr ? "語音辨識出錯（" + srErr + "），請再錄一次。"
+        : "這次沒有辨識到文字，錄音本身有存下來，可以按「我的錄音」聽。請再錄一次：按下錄音後停半秒再開始說，說完停半秒再按停止。";
+      res.innerHTML = ""; var nd = document.createElement("div"); nd.className = "heard"; nd.textContent = why; res.appendChild(nd); return;
+    }
     var hit = align(target, wordsOf(transcript));
     var ok = hit.filter(Boolean).length;
     paint(row, hit.map(function(h){ return h ? "s-good" : "s-bad"; }));
@@ -434,12 +466,25 @@ input[type=text],input[type=password]{background:var(--bg);border:1px solid var(
     navigator.mediaDevices.getUserMedia({ audio: true }).then(function(stream){
       var chunks = [], rec = new MediaRecorder(stream);
       live = { rec: rec, stream: stream, idx: idx, transcript: "" };
+      // Browser speech recognition often ends by itself (silence, a pause, a network hiccup) while the
+      // recording is still going. Keep what it heard so far and start it again until recording stops.
       var R = SR();
-      if (R) { try {
-        var sr = new R(); sr.lang = "en-US"; sr.continuous = true; sr.interimResults = false;
-        sr.onresult = function(e){ var t = ""; for (var k = 0; k < e.results.length; k++) t += e.results[k][0].transcript + " "; live && (live.transcript = t.trim()); };
-        sr.onerror = function(){}; sr.start(); live.sr = sr;
-      } catch(e){} }
+      var state0 = live;
+      state0.parts = []; state0.cur = ""; state0.srErr = ""; state0.srDone = !R;
+      function startSr(){
+        try {
+          var sr = new R(); sr.lang = "en-US"; sr.continuous = true; sr.interimResults = true;
+          sr.onresult = function(e){ var t = ""; for (var k = 0; k < e.results.length; k++) t += e.results[k][0].transcript + " "; state0.cur = t.trim(); };
+          sr.onerror = function(e){ if (e && e.error && e.error !== "no-speech" && e.error !== "aborted") state0.srErr = e.error; };
+          sr.onend = function(){
+            if (state0.cur) { state0.parts.push(state0.cur); state0.cur = ""; }
+            if (live === state0 && !state0.stopping && !state0.srErr) startSr();
+            else { state0.srDone = true; if (state0.onSrDone) state0.onSrDone(); }
+          };
+          sr.start(); state0.sr = sr;
+        } catch(e){ state0.srDone = true; }
+      }
+      if (R) startSr();
       rec.ondataavailable = function(e){ if (e.data.size) chunks.push(e.data); };
       rec.onstop = function(){
         stream.getTracks().forEach(function(t){ t.stop(); });
@@ -450,16 +495,23 @@ input[type=text],input[type=password]{background:var(--bg);border:1px solid var(
         recordings[idx] = URL.createObjectURL(blob);
         row.querySelectorAll("[data-need=rec]").forEach(function(b){ b.disabled = false; });
         var res = row.querySelector(".result");
-        // Give speech recognition a moment to deliver its final result.
-        setTimeout(function(){
-          if (state.sr) { try { state.sr.stop(); } catch(e){} }
-          showFree(row, items[idx], state.transcript);
-          if (load("wsp.azKey") && load("wsp.azRegion")) {
+        // Wait for recognition to hand over its last words (it finishes a moment after we ask it to stop).
+        state.stopping = true;
+        var finished = false;
+        function finish(){
+          if (finished) return; finished = true;
+          var transcript = state.parts.concat(state.cur ? [state.cur] : []).join(" ").trim();
+          var hasAzure = load("wsp.azKey") && load("wsp.azRegion");
+          if (transcript || !hasAzure) showFree(row, items[idx], transcript, state.srErr);
+          else res.innerHTML = "";
+          if (hasAzure) {
             var wait = document.createElement("div"); wait.className = "heard"; wait.textContent = "逐音評分中…"; res.appendChild(wait);
             assess(blob, items[idx].en).then(function(best){ showAzure(row, items[idx], best); })
-              .catch(function(err){ wait.innerHTML = '<span class="warn">逐音評分失敗：' + String(err.message || err).slice(0, 120) + '。請檢查金鑰和區域。上面是免費逐字比對的結果。</span>'; });
+              .catch(function(err){ wait.innerHTML = '<span class="warn">逐音評分失敗：' + String(err.message || err).slice(0, 120) + '。請檢查金鑰和區域。</span>'; });
           }
-        }, 700);
+        }
+        if (state.srDone) finish();
+        else { state.onSrDone = finish; try { state.sr.stop(); } catch(e){ finish(); } setTimeout(finish, 3000); }
       };
       rec.start(); btn.classList.add("live"); btn.textContent = "■ 停止";
     }).catch(function(){ statusEl.innerHTML = '<span class="warn">拿不到麥克風。請在網址列左邊允許這個網站使用麥克風。</span>'; });
@@ -567,6 +619,10 @@ input[type=text],input[type=password]{background:var(--bg);border:1px solid var(
     volume = parseInt(volEl.value, 10) / 100; volNum.textContent = volEl.value;
     player.volume = volume; save("wsp.vol", volEl.value);
   });
+
+  var wgEl = $("wgain"), wgNum = $("wgainNum");
+  wgEl.value = String(Math.round(wordGain * 100)); wgNum.textContent = wgEl.value + "%";
+  wgEl.addEventListener("input", function(){ wordGain = parseInt(wgEl.value, 10) / 100; wgNum.textContent = wgEl.value + "%"; save("wsp.wgain", wgEl.value); });
 
   var speedBtns = document.querySelectorAll(".speed button");
   function syncSpeed(){ speedBtns.forEach(function(b){ b.setAttribute("aria-pressed", String(parseFloat(b.dataset.rate) === rate)); }); }
